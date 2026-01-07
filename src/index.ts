@@ -1,6 +1,9 @@
 import * as FFmpegModule from "@ffmpeg/ffmpeg"
 
-const { createFFmpeg, fetchFile } = FFmpegModule as any
+const ffmpegAny = FFmpegModule as any
+const createFFmpeg =
+  ffmpegAny.createFFmpeg || ffmpegAny.default?.createFFmpeg || ffmpegAny.default || ffmpegAny
+const fetchFile = ffmpegAny.fetchFile || ffmpegAny.default?.fetchFile
 
 export interface Env {
   R2_BUCKET: R2Bucket
@@ -40,15 +43,16 @@ function buildPublicUrl(base: string | undefined, key: string) {
   const trimmedKey = key.replace(/^\/+/, "")
   return `${trimmedBase}/${trimmedKey}`
 }
-
-const ffmpeg = createFFmpeg({
-  log: false,
-  corePath: "https://unpkg.com/@ffmpeg/core@0.12.10/dist/ffmpeg-core.js",
-})
-
+let ffmpeg: any = null
 let ffmpegReady: Promise<void> | null = null
 
 async function ensureFfmpegLoaded() {
+  if (!ffmpeg) {
+    ffmpeg = createFFmpeg({
+      log: false,
+      corePath: "https://unpkg.com/@ffmpeg/core@0.12.10/dist/ffmpeg-core.js",
+    })
+  }
   if (!ffmpegReady) {
     ffmpegReady = ffmpeg.load()
   }
