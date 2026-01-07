@@ -1,6 +1,24 @@
+import * as FFmpegModule from "@ffmpeg/ffmpeg"
+
+const { createFFmpeg, fetchFile } = FFmpegModule as any
+
 export interface Env {
+  R2_BUCKET: R2Bucket
   THUMBNAIL_WORKER_SECRET: string
   R2_PUBLIC_BASE_URL?: string
+}
+
+type R2Bucket = {
+  get: (key: string) => Promise<R2Object | null>
+  put: (
+    key: string,
+    value: ReadableStream | ArrayBuffer | Uint8Array,
+    options?: { httpMetadata?: { contentType?: string } },
+  ) => Promise<unknown>
+}
+
+type R2Object = {
+  body: ReadableStream | null
 }
 
 type ThumbnailPayload = {
@@ -21,6 +39,20 @@ function buildPublicUrl(base: string | undefined, key: string) {
   const trimmedBase = base.replace(/\/+$/, "")
   const trimmedKey = key.replace(/^\/+/, "")
   return `${trimmedBase}/${trimmedKey}`
+}
+
+const ffmpeg = createFFmpeg({
+  log: false,
+  corePath: "https://unpkg.com/@ffmpeg/core@0.12.10/dist/ffmpeg-core.js",
+})
+
+let ffmpegReady: Promise<void> | null = null
+
+async function ensureFfmpegLoaded() {
+  if (!ffmpegReady) {
+    ffmpegReady = ffmpeg.load()
+  }
+  await ffmpegReady
 }
 
 export default {
@@ -52,9 +84,41 @@ export default {
         })
       }
 
-      const key = `sora-thumbnails/${jobId}.jpg`
+      const thumbnailKey = `sora-thumbnails/${jobId}.jpg`
 
-      const publicUrl = buildPublicUrl(env.R2_PUBLIC_BASE_URL, key)
+      const bucket = env.R2_BUCKET
+
+      const existing = await bucket.get(thumbnailKey)
+      if (existing && existing.body) {
+        const existingUrl = buildPublicUrl(env.R2_PUBLIC_BASE_URL, thumbnailKey)
+        return new Response(JSON.stringify({ ok: true, r2ThumbnailUrl: existingUrl }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        })
+      }
+
+      const videoUrl = new URL(videoUrlRaw)
+      const videoKey = videoUrl.pathname.replace(/^\/+/, "")
+
+      const videoObject = await bucket.get(videoKey)
+      if (!videoObject || !videoObject.body) {
+        return new Response(JSON.stringify({ error: "Video object not found in R2" }), {
+          status: 404,
+          headers: { "content-type": "application/json" },
+        })
+      }
+
+      const videoBuffer = await new Response(videoObject.body).arrayBuffer()
+
+      const thumbnailBuffer = await generateThumbnailFromVideo(videoBuffer)
+
+      await bucket.put(thumbnailKey, thumbnailBuffer, {
+        httpMetadata: {
+          contentType: "image/jpeg",
+        },
+      })
+
+      const publicUrl = buildPublicUrl(env.R2_PUBLIC_BASE_URL, thumbnailKey)
 
       return new Response(JSON.stringify({ ok: true, r2ThumbnailUrl: publicUrl }), {
         status: 200,
@@ -73,17 +137,34 @@ export default {
   },
 }
 
-async function generateThumbnailFromVideo(): Promise<Uint8Array> {
-  const base64 =
-    "/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAkGBxAQEBAPEA8QDw8PDw8PDw8PDw8PDw8PFRIWFhURFRUYHSggGBolGxUVITEhJSkrLi4uFx8zODMtNygtLisBCgoKDg0OFQ8PFSsdFR0rKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrK//AABEIAKAAoAMBIgACEQEDEQH/xAAbAAACAwEBAQAAAAAAAAAAAAAEBQADBgIBB//EADkQAAEDAgMFBQcEAwEAAAAAAAEAAgMEEQUSITFBUWFxBhMicYGRobHB0fAHFCNS8RUjYpL/xAAZAQADAQEBAAAAAAAAAAAAAAABAgMABAX/xAAkEQACAgICAgIDAQEAAAAAAAAAAQIRAyESMQRBURMiMmFxkf/aAAwDAQACEQMRAD8A9xREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQH/2Q=="
+async function generateThumbnailFromVideo(videoBuffer: ArrayBuffer): Promise<Uint8Array> {
+  await ensureFfmpegLoaded()
 
-  const binaryString = atob(base64)
-  const length = binaryString.length
-  const bytes = new Uint8Array(length)
+  const inputName = "input.mp4"
+  const outputName = "thumbnail.jpg"
 
-  for (let i = 0; i < length; i++) {
-    bytes[i] = binaryString.charCodeAt(i)
-  }
+  const data = new Uint8Array(videoBuffer)
 
-  return bytes
+  ffmpeg.FS("writeFile", inputName, await fetchFile(data))
+
+  await ffmpeg.run(
+    "-i",
+    inputName,
+    "-ss",
+    "00:00:01.000",
+    "-frames:v",
+    "1",
+    "-vf",
+    "scale=512:-1",
+    "-f",
+    "image2",
+    outputName,
+  )
+
+  const output = ffmpeg.FS("readFile", outputName)
+
+  ffmpeg.FS("unlink", inputName)
+  ffmpeg.FS("unlink", outputName)
+
+  return output
 }
