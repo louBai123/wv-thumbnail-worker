@@ -1,0 +1,13 @@
+name = "wv-thumbnail-worker"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+
+[vars]
+THUMBNAIL_WORKER_SECRET = "replace-with-random-secret"
+R2_PUBLIC_BASE_URL = "https://static.ai757.com"
+
+[[r2_buckets]]
+binding = "R2_BUCKET"
+bucket_name = "wisdom-valley"
+preview_bucket_name = "wisdom-valley-dev"
+
