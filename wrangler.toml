@@ -3,7 +3,7 @@ main = "src/index.ts"
 compatibility_date = "2024-01-01"
 
 [vars]
-THUMBNAIL_WORKER_SECRET = "replace-with-random-secret"
+THUMBNAIL_WORKER_SECRET = "dwjiojiofw4568464akodw-secret"
 R2_PUBLIC_BASE_URL = "https://static.ai757.com"
 
 [[r2_buckets]]

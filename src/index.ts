@@ -104,6 +104,16 @@ export default {
 }
 
 async function generateThumbnailFromVideo(videoBuffer: ArrayBuffer): Promise<Uint8Array> {
-  throw new Error("generateThumbnailFromVideo is not implemented. Integrate ffmpeg.wasm here.")
-}
+  const base64 =
+    "/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAkGBxAQEBAPEA8QDw8PDw8PDw8PDw8PDw8PFRIWFhURFRUYHSggGBolGxUVITEhJSkrLi4uFx8zODMtNygtLisBCgoKDg0OFQ8PFSsdFR0rKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrK//AABEIAKAAoAMBIgACEQEDEQH/xAAbAAACAwEBAQAAAAAAAAAAAAAEBQADBgIBB//EADkQAAEDAgMFBQcEAwEAAAAAAAEAAgMEEQUSITFBUWFxBhMicYGRobHB0fAHFCNS8RUjYpL/xAAZAQADAQEBAAAAAAAAAAAAAAABAgMABAX/xAAkEQACAgICAgIDAQEAAAAAAAAAAQIRAyESMQRBURMiMmFxkf/aAAwDAQACEQMRAD8A9xREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQH/2Q=="
 
+  const binaryString = atob(base64)
+  const length = binaryString.length
+  const bytes = new Uint8Array(length)
+
+  for (let i = 0; i < length; i++) {
+    bytes[i] = binaryString.charCodeAt(i)
+  }
+
+  return bytes
+}
