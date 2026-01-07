@@ -1,9 +1,4 @@
-import * as FFmpegModule from "@ffmpeg/ffmpeg"
-
-const ffmpegAny = FFmpegModule as any
-const createFFmpeg =
-  ffmpegAny.createFFmpeg || ffmpegAny.default?.createFFmpeg || ffmpegAny.default || ffmpegAny
-const fetchFile = ffmpegAny.fetchFile || ffmpegAny.default?.fetchFile
+import { createFFmpeg, fetchFile } from "@ffmpeg/ffmpeg"
 
 export interface Env {
   R2_BUCKET: R2Bucket
