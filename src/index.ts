@@ -1,4 +1,4 @@
-import { createFFmpeg, fetchFile } from "@ffmpeg/ffmpeg"
+import { FFmpeg } from "@ffmpeg/ffmpeg"
 
 export interface Env {
   R2_BUCKET: R2Bucket
@@ -38,15 +38,12 @@ function buildPublicUrl(base: string | undefined, key: string) {
   const trimmedKey = key.replace(/^\/+/, "")
   return `${trimmedBase}/${trimmedKey}`
 }
-let ffmpeg: any = null
-let ffmpegReady: Promise<void> | null = null
+let ffmpeg: FFmpeg | null = null
+let ffmpegReady: Promise<boolean> | null = null
 
 async function ensureFfmpegLoaded() {
   if (!ffmpeg) {
-    ffmpeg = createFFmpeg({
-      log: false,
-      corePath: "https://unpkg.com/@ffmpeg/core@0.12.10/dist/ffmpeg-core.js",
-    })
+    ffmpeg = new FFmpeg()
   }
   if (!ffmpegReady) {
     ffmpegReady = ffmpeg.load()
@@ -144,9 +141,13 @@ async function generateThumbnailFromVideo(videoBuffer: ArrayBuffer): Promise<Uin
 
   const data = new Uint8Array(videoBuffer)
 
-  ffmpeg.FS("writeFile", inputName, await fetchFile(data))
+  if (!ffmpeg) {
+    throw new Error("FFmpeg not initialized")
+  }
 
-  await ffmpeg.run(
+  await ffmpeg.writeFile(inputName, data)
+
+  await ffmpeg.exec([
     "-i",
     inputName,
     "-ss",
@@ -158,12 +159,12 @@ async function generateThumbnailFromVideo(videoBuffer: ArrayBuffer): Promise<Uin
     "-f",
     "image2",
     outputName,
-  )
+  ])
 
-  const output = ffmpeg.FS("readFile", outputName)
+  const output = await ffmpeg.readFile(outputName)
 
-  ffmpeg.FS("unlink", inputName)
-  ffmpeg.FS("unlink", outputName)
+  await ffmpeg.deleteFile(inputName)
+  await ffmpeg.deleteFile(outputName)
 
-  return output
+  return output as Uint8Array
 }
