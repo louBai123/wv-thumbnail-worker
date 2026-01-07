@@ -85,17 +85,7 @@ export default {
         })
       }
 
-      const videoResp = await fetch(videoUrlRaw)
-      if (!videoResp.ok || !videoResp.body) {
-        return new Response(JSON.stringify({ error: "Failed to download video" }), {
-          status: 502,
-          headers: { "content-type": "application/json" },
-        })
-      }
-
-      const videoBuffer = await videoResp.arrayBuffer()
-
-      const thumbnailBuffer = await generateThumbnailFromVideo(videoBuffer)
+      const thumbnailBuffer = await generateThumbnailFromVideo()
 
       await bucket.put(key, thumbnailBuffer, {
         httpMetadata: {
@@ -122,7 +112,7 @@ export default {
   },
 }
 
-async function generateThumbnailFromVideo(videoBuffer: ArrayBuffer): Promise<Uint8Array> {
+async function generateThumbnailFromVideo(): Promise<Uint8Array> {
   const base64 =
     "/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAkGBxAQEBAPEA8QDw8PDw8PDw8PDw8PDw8PFRIWFhURFRUYHSggGBolGxUVITEhJSkrLi4uFx8zODMtNygtLisBCgoKDg0OFQ8PFSsdFR0rKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrKysrK//AABEIAKAAoAMBIgACEQEDEQH/xAAbAAACAwEBAQAAAAAAAAAAAAAEBQADBgIBB//EADkQAAEDAgMFBQcEAwEAAAAAAAEAAgMEEQUSITFBUWFxBhMicYGRobHB0fAHFCNS8RUjYpL/xAAZAQADAQEBAAAAAAAAAAAAAAABAgMABAX/xAAkEQACAgICAgIDAQEAAAAAAAAAAQIRAyESMQRBURMiMmFxkf/aAAwDAQACEQMRAD8A9xREQBERAEREAREQBERAEREAREQBERAEREAREQBERAEREAREQH/2Q=="
 
