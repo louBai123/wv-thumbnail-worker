@@ -1,20 +1,6 @@
 export interface Env {
-  R2_BUCKET: R2Bucket
   THUMBNAIL_WORKER_SECRET: string
   R2_PUBLIC_BASE_URL?: string
-}
-
-type R2Bucket = {
-  get: (key: string) => Promise<R2Object | null>
-  put: (
-    key: string,
-    value: ReadableStream | ArrayBuffer | Uint8Array,
-    options?: { httpMetadata?: { contentType?: string } },
-  ) => Promise<unknown>
-}
-
-type R2Object = {
-  body: ReadableStream | null
 }
 
 type ThumbnailPayload = {
@@ -67,31 +53,6 @@ export default {
       }
 
       const key = `sora-thumbnails/${jobId}.jpg`
-
-      const bucket = (env as any).R2_BUCKET as R2Bucket | undefined
-      if (!bucket || typeof bucket.get !== "function" || typeof bucket.put !== "function") {
-        return new Response(JSON.stringify({ error: "R2 bucket binding R2_BUCKET is not available" }), {
-          status: 500,
-          headers: { "content-type": "application/json" },
-        })
-      }
-
-      const existing = await bucket.get(key)
-      if (existing && existing.body) {
-        const publicUrl = buildPublicUrl(env.R2_PUBLIC_BASE_URL, key)
-        return new Response(JSON.stringify({ ok: true, r2ThumbnailUrl: publicUrl }), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        })
-      }
-
-      const thumbnailBuffer = await generateThumbnailFromVideo()
-
-      await bucket.put(key, thumbnailBuffer, {
-        httpMetadata: {
-          contentType: "image/jpeg",
-        },
-      })
 
       const publicUrl = buildPublicUrl(env.R2_PUBLIC_BASE_URL, key)
 
