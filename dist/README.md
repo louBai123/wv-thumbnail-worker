@@ -1,1 +1,1 @@
-This folder contains the built output assets for the worker "wv-thumbnail-worker" generated at 2026-01-07T11:52:17.548Z.
+This folder contains the built output assets for the worker "wv-thumbnail-worker" generated at 2026-01-08T00:59:04.552Z.

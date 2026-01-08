@@ -1,5 +1,3 @@
-import { FFmpeg } from "@ffmpeg/ffmpeg"
-
 export interface Env {
   R2_BUCKET: R2Bucket
   THUMBNAIL_WORKER_SECRET: string
@@ -21,7 +19,6 @@ type R2Object = {
 
 type ThumbnailPayload = {
   jobId?: string
-  videoUrl?: string
 }
 
 function normalizeUrl(value: unknown) {
@@ -37,18 +34,6 @@ function buildPublicUrl(base: string | undefined, key: string) {
   const trimmedBase = base.replace(/\/+$/, "")
   const trimmedKey = key.replace(/^\/+/, "")
   return `${trimmedBase}/${trimmedKey}`
-}
-let ffmpeg: FFmpeg | null = null
-let ffmpegReady: Promise<boolean> | null = null
-
-async function ensureFfmpegLoaded() {
-  if (!ffmpeg) {
-    ffmpeg = new FFmpeg()
-  }
-  if (!ffmpegReady) {
-    ffmpegReady = ffmpeg.load()
-  }
-  await ffmpegReady
 }
 
 export default {
@@ -71,17 +56,15 @@ export default {
 
       const payload = (await request.json().catch(() => ({}))) as ThumbnailPayload
       const jobId = typeof payload.jobId === "string" ? payload.jobId : ""
-      const videoUrlRaw = normalizeUrl(payload.videoUrl)
 
-      if (!jobId || !videoUrlRaw) {
-        return new Response(JSON.stringify({ error: "Missing jobId or videoUrl" }), {
+      if (!jobId) {
+        return new Response(JSON.stringify({ error: "Missing jobId" }), {
           status: 400,
           headers: { "content-type": "application/json" },
         })
       }
 
       const thumbnailKey = `sora-thumbnails/${jobId}.jpg`
-
       const bucket = env.R2_BUCKET
 
       const existing = await bucket.get(thumbnailKey)
@@ -93,33 +76,13 @@ export default {
         })
       }
 
-      const videoUrl = new URL(videoUrlRaw)
-      const videoKey = videoUrl.pathname.replace(/^\/+/, "")
-
-      const videoObject = await bucket.get(videoKey)
-      if (!videoObject || !videoObject.body) {
-        return new Response(JSON.stringify({ error: "Video object not found in R2" }), {
+      return new Response(
+        JSON.stringify({ error: "Thumbnail not found in R2", r2ThumbnailKey: thumbnailKey }),
+        {
           status: 404,
           headers: { "content-type": "application/json" },
-        })
-      }
-
-      const videoBuffer = await new Response(videoObject.body).arrayBuffer()
-
-      const thumbnailBuffer = await generateThumbnailFromVideo(videoBuffer)
-
-      await bucket.put(thumbnailKey, thumbnailBuffer, {
-        httpMetadata: {
-          contentType: "image/jpeg",
         },
-      })
-
-      const publicUrl = buildPublicUrl(env.R2_PUBLIC_BASE_URL, thumbnailKey)
-
-      return new Response(JSON.stringify({ ok: true, r2ThumbnailUrl: publicUrl }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      })
+      )
     } catch (error) {
       const message =
         error && typeof (error as any).message === "string"
@@ -131,40 +94,4 @@ export default {
       })
     }
   },
-}
-
-async function generateThumbnailFromVideo(videoBuffer: ArrayBuffer): Promise<Uint8Array> {
-  await ensureFfmpegLoaded()
-
-  const inputName = "input.mp4"
-  const outputName = "thumbnail.jpg"
-
-  const data = new Uint8Array(videoBuffer)
-
-  if (!ffmpeg) {
-    throw new Error("FFmpeg not initialized")
-  }
-
-  await ffmpeg.writeFile(inputName, data)
-
-  await ffmpeg.exec([
-    "-i",
-    inputName,
-    "-ss",
-    "00:00:01.000",
-    "-frames:v",
-    "1",
-    "-vf",
-    "scale=512:-1",
-    "-f",
-    "image2",
-    outputName,
-  ])
-
-  const output = await ffmpeg.readFile(outputName)
-
-  await ffmpeg.deleteFile(inputName)
-  await ffmpeg.deleteFile(outputName)
-
-  return output as Uint8Array
 }
